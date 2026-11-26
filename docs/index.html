@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Draft Assistant MLBB</title>
+<meta name="description" content="Bantu draft Mobile Legends: meta dari pertandingan pro, hero pool tim, dan peringatan patch.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDF0F5;
+    --surface: #FFFFFF;
+    --ink: #172033;
+    --muted: #5B6578;
+    --line: #D3D9E4;
+    --blue: #2356E0;
+    --blue-soft: #E3EAFC;
+    --red: #D0333E;
+    --red-soft: #FBE5E7;
+    --gold: #B8860B;
+    --gold-soft: #FBF1D6;
+    --ban: #4A5368;
+    --cond: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --body: "Barlow", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 400 15px/1.45 var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 12px 14px 40px; }
+  header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 4px 2px 12px; }
+  header.top h1 { font: 700 24px/1 var(--cond); margin: 0; letter-spacing: .2px; white-space: nowrap; }
+  header.top p { margin: 0; color: var(--muted); font-size: 13px; }
+
+  /* ---------- papan draft: elemen utama ---------- */
+  .board {
+    display: grid; grid-template-columns: 1fr; gap: 10px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px;
+  }
+  .side { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .side-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; }
+  .side-head h2 { font: 700 19px/1 var(--cond); margin: 0; }
+  .side.us h2 { color: var(--blue); }
+  .side.them h2 { color: var(--red); }
+  .side-head span { font-size: 12px; color: var(--muted); }
+  .slot {
+    min-height: 54px; border-radius: 8px; min-width: 0; border: 1.5px dashed var(--line); background: transparent;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    padding: 4px 5px; text-align: left; overflow: hidden;
+  }
+  .slot .n { display: block; width: 100%; font: 700 14px/1.05 var(--cond); }
+  .slot .s { font-size: 11px; color: var(--muted); line-height: 1.2; }
+  .slot.empty .n { color: var(--muted); font-weight: 500; font-size: 14px; }
+  .side.us .slot.filled { border: 0; background: var(--blue-soft); box-shadow: inset 4px 0 0 var(--blue); }
+  .side.them .slot.filled { border: 0; background: var(--red-soft); box-shadow: inset 4px 0 0 var(--red); }
+  .slot.next { border-style: solid; }
+  .side.us .slot.next { border-color: var(--blue); }
+  .side.them .slot.next { border-color: var(--red); }
+
+  .bans { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .bans h2 { grid-column: 1 / -1; font: 600 16px/1 var(--cond); margin: 0; color: var(--ban); }
+  .ban {
+    border: 1.5px dashed var(--line); background: transparent; border-radius: 6px;
+    min-width: 0; height: 28px; padding: 0 4px; font: 600 14px/1 var(--cond);
+    color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .ban.filled { border: 0; background: var(--ban); color: #fff; text-decoration: line-through; text-decoration-thickness: 1.5px; }
+  .ban.next { border-style: solid; border-color: var(--ban); }
+
+  /* ---------- kontrol ---------- */
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  .modes { display: flex; flex: 1 1 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .modes button {
+    flex: 1; border: 0; background: transparent; border-radius: 8px; padding: 9px 10px; font: 600 16px/1 var(--cond); white-space: nowrap;
+  }
+  .modes button[aria-pressed="true"][data-mode="ban"] { background: var(--ban); color: #fff; }
+  .modes button[aria-pressed="true"][data-mode="us"] { background: var(--blue); color: #fff; }
+  .modes button[aria-pressed="true"][data-mode="them"] { background: var(--red); color: #fff; }
+  .ghost { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 6px 12px; font-weight: 500; font-size: 14px; }
+  .controls .spacer { flex: 1; }
+
+  /* ---------- tab (HP) ---------- */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+  .tabs button {
+    border: 0; background: none; padding: 10px 12px; font: 600 17px/1 var(--cond); color: var(--muted);
+    border-bottom: 3px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .panel[hidden] { display: none; }
+
+  .panel h3 { font: 700 20px/1.1 var(--cond); margin: 0 0 8px; }
+  .panel-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .panel-head h3 { margin: 0; }
+  input[type=search], select, .pool input {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 10px; min-width: 0;
+  }
+  input[type=search] { width: 100%; margin-bottom: 8px; }
+
+  /* grid hero */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+  .hero {
+    position: relative; border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+    padding: 7px 8px 9px; text-align: left; min-height: 48px;
+  }
+  .hero .n { display: block; font: 600 16px/1.05 var(--cond); }
+  .hero .bar { position: absolute; left: 8px; right: 8px; bottom: 4px; height: 3px; border-radius: 2px; background: var(--paper); }
+  .hero .bar i { display: block; height: 100%; border-radius: 2px; background: var(--muted); }
+  .hero.own { border-color: var(--gold); background: var(--gold-soft); }
+  .hero .flag { position: absolute; top: 3px; right: 5px; font-size: 12px; }
+  .hero:disabled { opacity: .35; cursor: not-allowed; }
+  .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+
+  /* saran */
+  .sugg { display: flex; flex-direction: column; gap: 6px; }
+  .row {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px;
+    text-align: left; width: 100%;
+  }
+  .row .n { font: 700 18px/1.1 var(--cond); }
+  .row .own { color: var(--gold); font-weight: 600; font-size: 13px; margin-left: 6px; font-family: var(--body); }
+  .row .wr { font: 700 20px/1 var(--cond); text-align: right; }
+  .row .facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+  .row .facts b { color: var(--ink); font-weight: 600; }
+  .pos { color: #1C7A45 !important; } .neg { color: var(--red) !important; }
+  .conf::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; background: currentColor; }
+  .conf.kuat { color: #1C7A45; } .conf.sedang { color: var(--gold); } .conf.lemah { color: var(--red); }
+  .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+
+  /* tim */
+  .pool { display: grid; gap: 10px; }
+  .pool .role { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .pool label { display: block; font: 600 16px/1.2 var(--cond); margin-bottom: 6px; }
+  .pool .fields { display: grid; grid-template-columns: 1fr 2fr; gap: 6px; }
+  .pool input { width: 100%; }
+
+  .note { background: var(--surface); border-left: 4px solid var(--gold); border-radius: 6px; padding: 9px 12px; font-size: 14px; margin: 10px 0 0; }
+  footer { color: var(--muted); font-size: 12.5px; margin-top: 28px; max-width: 70ch; }
+  footer a { color: inherit; }
+
+  /* ---------- tablet & laptop ---------- */
+  @media (min-width: 760px) {
+    .board { grid-template-columns: 1fr 1fr; grid-template-areas: "us them" "bans bans"; gap: 14px 20px; padding: 16px; }
+    .side.us { grid-area: us; } .side.them { grid-area: them; } .bans { grid-area: bans; }
+    .side.them .side-head { flex-direction: row-reverse; }
+    .slot { min-height: 64px; }
+    .slot .n { font-size: 17px; }
+    .modes { flex: 0 0 auto; }
+    .modes button { flex: 0 0 auto; padding: 9px 16px; }
+    .bans { grid-template-columns: auto repeat(10, 1fr); align-items: center; }
+    .bans h2 { grid-column: auto; margin-right: 4px; }
+    .tabs { display: none; }
+    .main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; }
+    .panel[hidden] { display: block; }
+    .panel.team { grid-column: 1 / -1; }
+    .pool { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+    .pool .fields { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 1100px) {
+    .board { grid-template-columns: 1fr 330px 1fr; grid-template-areas: "us bans them"; align-items: start; }
+    .bans { grid-template-columns: repeat(5, 1fr); }
+    .bans h2 { grid-column: 1 / -1; text-align: center; margin: 0 0 4px; }
+    .slot { min-height: 76px; }
+    .main { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 280px; }
+    .panel.team { grid-column: auto; }
+    .pool { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Draft Assistant MLBB</h1>
+    <p id="window">Memuat data…</p>
+  </header>
+
+  <section class="board" aria-label="Papan draft">
+    <div class="side us" id="us"></div>
+    <div class="bans" id="bans"></div>
+    <div class="side them" id="them"></div>
+  </section>
+
+  <div class="controls">
+    <div class="modes" role="group" aria-label="Pilihan berikutnya masuk ke">
+      <button data-mode="ban">Ban</button>
+      <button data-mode="us">Pick kita</button>
+      <button data-mode="them">Pick lawan</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="ghost" id="undo">Batalkan</button>
+    <button class="ghost" id="reset">Draft baru</button>
+  </div>
+  <div id="patchNote"></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="pick" aria-selected="true">Pilih hero</button>
+    <button role="tab" data-tab="sugg" aria-selected="false">Saran</button>
+    <button role="tab" data-tab="team" aria-selected="false">Hero pool tim</button>
+  </nav>
+
+  <main class="main">
+    <section class="panel pick" data-panel="pick">
+      <h3>Pilih hero</h3>
+      <input type="search" id="search" placeholder="Cari hero…" autocomplete="off">
+      <div class="grid" id="grid"></div>
+      <p class="hint">Garis di bawah nama = seberapa sering hero di-pick atau di-ban tim pro. Kotak emas = dikuasai timmu.</p>
+    </section>
+
+    <section class="panel sugg-panel" data-panel="sugg" hidden>
+      <div class="panel-head">
+        <h3>Saran</h3>
+        <select id="sort" aria-label="Urutkan saran">
+          <option value="presence">Prioritas tim pro</option>
+          <option value="winRate">Win rate</option>
+          <option value="counter">Unggul vs pick lawan</option>
+          <option value="synergy">Cocok dengan tim</option>
+        </select>
+      </div>
+      <label class="toggle"><input type="checkbox" id="onlyOwn"> Hanya hero yang dikuasai tim</label>
+      <div class="sugg" id="sugg" style="margin-top:8px"></div>
+    </section>
+
+    <section class="panel team" data-panel="team" hidden>
+      <h3>Hero pool tim</h3>
+      <div class="pool" id="pool"></div>
+      <p class="hint">Pisahkan hero dengan koma. Tersimpan di browser ini saja.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Angka berasal dari pertandingan profesional (MPL ID, MPL PH, MSC), bukan ranked. Meta ranked bisa berbeda,
+      dan hero yang benar-benar dikuasai pemainmu sering kali pilihan yang lebih aman.
+      Skor counter dan sinergi dari data pro mudah berubah antar patch, jadi anggap sebagai petunjuk lemah.</p>
+    <p>Data: <a href="https://liquipedia.net/mobilelegends/" rel="noopener">Liquipedia</a> (CC-BY-SA 3.0).
+      Tidak berafiliasi dengan Moonton maupun Liquipedia.</p>
+  </footer>
+</div>
+
+<script>
+const ROLES = ["Gold", "EXP", "Mid", "Jungle", "Roam"];
+const STORE = "mlbb-draft-v1";
+let D = null;                 // data dari meta.json
+let META = {};                // hero -> statistik
+let mode = "ban";
+let draft = { ban: [], us: [], them: [] };
+let history = [];
+let pool = Object.fromEntries(ROLES.map(r => [r, { player: "", heroes: "" }]));
+
+// ---------- penyimpanan (localStorage bisa tidak tersedia) ----------
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) || "null");
+    if (s && s.pool) pool = Object.assign(pool, s.pool);
+    if (s && s.draft) draft = s.draft;
+  } catch (e) {}
+}
+function saveState() {
+  try { localStorage.setItem(STORE, JSON.stringify({ pool, draft })); } catch (e) {}
+}
+
+// ---------- util ----------
+const name = h => h.split(" ").map(w => w === "and" ? w : w.split("-").map(x => x[0].toUpperCase() + x.slice(1)).join("-")).join(" ");
+const $ = s => document.querySelector(s);
+const pct = x => Math.round(x * 100) + "%";
+const LIMIT = { ban: 10, us: 5, them: 5 };
+const taken = () => new Set([...draft.ban, ...draft.us, ...draft.them]);
+function conf(picks) { return picks >= 40 ? "kuat" : picks >= 15 ? "sedang" : "lemah"; }
+function owners() {
+  const map = {};
+  for (const r of ROLES) {
+    for (const h of pool[r].heroes.split(",").map(x => x.trim().toLowerCase()).filter(Boolean)) {
+      (map[h] = map[h] || []).push(pool[r].player || r);
+    }
+  }
+  return map;
+}
+function pairScore(table, key) {
+  const v = D[table][key];
+  return v ? { s: v[0], n: v[1] } : null;
+}
+function counterVs(h) {      // rata-rata skor h melawan pick lawan
+  const xs = draft.them.map(e => pairScore("counter", h + "|" + e)).filter(Boolean);
+  if (!xs.length) return null;
+  return { s: xs.reduce((a, x) => a + x.s, 0) / xs.length, n: xs.reduce((a, x) => a + x.n, 0) };
+}
+function synergyWith(h) {    // rata-rata skor sinergi h dengan pick tim kita
+  const xs = draft.us.map(a => pairScore("synergy", [h, a].sort().join("|"))).filter(Boolean);
+  if (!xs.length) return null;
+  return { s: xs.reduce((a, x) => a + x.s, 0) / xs.length, n: xs.reduce((a, x) => a + x.n, 0) };
+}
+
+// ---------- aksi ----------
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll(".modes button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  renderBoard();
+}
+function autoMode() {        // pindah ke bagian yang belum penuh
+  if (draft[mode].length < LIMIT[mode]) return;
+  const next = ["ban", "us", "them"].find(k => draft[k].length < LIMIT[k]);
+  if (next) setMode(next);
+}
+function addHero(h) {
+  if (taken().has(h) || draft[mode].length >= LIMIT[mode]) return;
+  draft[mode].push(h);
+  history.push(mode);
+  autoMode();
+  saveState(); render();
+}
+function removeHero(kind, h) {
+  draft[kind] = draft[kind].filter(x => x !== h);
+  saveState(); render();
+}
+
+// ---------- render ----------
+function renderBoard() {
+  const side = (kind, title, el) => {
+    const filled = draft[kind];
+    let html = `<div class="side-head"><h2>${title}</h2><span>${filled.length}/5</span></div>`;
+    for (let i = 0; i < 5; i++) {
+      const h = filled[i];
+      const isNext = !h && i === filled.length && mode === kind;
+      if (h) {
+        const m = META[h];
+        const sub = m ? `${pct(m.presence)} pro` : "tanpa data";
+        html += `<button class="slot filled" data-kind="${kind}" data-hero="${h}" aria-label="Hapus ${h}">
+                   <span class="n">${name(h)}</span><span class="s">${sub}</span></button>`;
+      } else {
+        html += `<button class="slot empty${isNext ? " next" : ""}" data-select="${kind}" aria-label="Isi pick ${title}">
+                   <span class="n">${i + 1}</span></button>`;
+      }
+    }
+    el.innerHTML = html;
+  };
+  side("us", "Tim kamu", $("#us"));
+  side("them", "Lawan", $("#them"));
+
+  let b = `<h2>Ban</h2>`;
+  for (let i = 0; i < 10; i++) {
+    const h = draft.ban[i];
+    const isNext = !h && i === draft.ban.length && mode === "ban";
+    b += h ? `<button class="ban filled" data-kind="ban" data-hero="${h}" aria-label="Hapus ban ${h}" title="${name(h)}">${name(h)}</button>`
+           : `<button class="ban${isNext ? " next" : ""}" data-select="ban" aria-label="Isi ban">&nbsp;</button>`;
+  }
+  $("#bans").innerHTML = b;
+  fitSlots();
+}
+// nama panjang (Esmeralda, Benedetta) diperkecil sampai muat di slot
+function fitSlots() {
+  document.querySelectorAll(".slot.filled .n").forEach(el => {
+    el.style.fontSize = "";
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth && size > 10) { size -= 0.5; el.style.fontSize = size + "px"; }
+  });
+}
+window.addEventListener("resize", () => { if (D) fitSlots(); });
+
+function renderGrid() {
+  const q = $("#search").value.trim().toLowerCase();
+  const own = owners(), t = taken(), flags = D.patchFlags;
+  const heroes = D.heroes.filter(h => h.includes(q));
+  $("#grid").innerHTML = heroes.map(h => {
+    const m = META[h];
+    const w = m ? Math.max(4, Math.round(m.presence * 100)) : 0;
+    return `<button class="hero${own[h] ? " own" : ""}" data-hero="${h}" ${t.has(h) ? "disabled" : ""}
+              title="${m ? `Pro: ${pct(m.presence)} hadir di draft, ${m.picks} pick` : "Tidak ada data pro"}">
+              ${flags[h] ? `<span class="flag" title="Berubah di patch baru: ${flags[h]}">⚠️</span>` : ""}
+              <span class="n">${name(h)}</span><span class="bar"><i style="width:${w}%"></i></span></button>`;
+  }).join("") || `<p class="hint">Tidak ada hero bernama “${q}”.</p>`;
+}
+
+function renderSuggestions() {
+  const own = owners(), t = taken(), flags = D.patchFlags;
+  const sort = $("#sort").value, onlyOwn = $("#onlyOwn").checked;
+  let rows = D.heroes.filter(h => !t.has(h) && (!onlyOwn || own[h])).map(h => {
+    const m = META[h] || { presence: 0, winRate: null, picks: 0 };
+    return { h, m, own: own[h], ctr: counterVs(h), syn: synergyWith(h), flag: flags[h] };
+  });
+  if (!onlyOwn) rows = rows.filter(r => r.m.picks >= 5 || r.own);
+  const key = {
+    presence: r => r.m.presence,
+    winRate: r => r.m.picks >= 15 ? r.m.winRate : -1,
+    counter: r => r.ctr ? r.ctr.s : -9,
+    synergy: r => r.syn ? r.syn.s : -9,
+  }[sort];
+  rows.sort((a, b) => key(b) - key(a));
+
+  if (!rows.length) {
+    $("#sugg").innerHTML = `<p class="hint">Belum ada hero di hero pool tim. Isi di bagian “Hero pool tim”.</p>`;
+    return;
+  }
+  // warna hanya untuk bukti yang cukup kuat; sisanya abu-abu supaya tidak menyesatkan
+  const signed = (x, label) => {
+    if (!x) return "";
+    const strong = Math.abs(x.s) >= 0.15 && x.n >= 15;
+    const cls = strong ? (x.s > 0 ? "pos" : "neg") : "";
+    return `<span>${label} <b class="${cls}">${x.s > 0 ? "+" : ""}${x.s.toFixed(2)}</b> (${Math.round(x.n)} game)</span>`;
+  };
+  $("#sugg").innerHTML = rows.slice(0, 25).map(r => {
+    const c = conf(r.m.picks);
+    return `<button class="row" data-hero="${r.h}">
+      <span class="n">${name(r.h)}${r.own ? `<span class="own">★ ${r.own.join(", ")}</span>` : ""}</span>
+      <span class="wr">${r.m.picks ? pct(r.m.winRate) : "–"}</span>
+      <span class="facts">
+        <span>Hadir <b>${pct(r.m.presence)}</b></span>
+        <span class="conf ${c}">${r.m.picks} pick, data ${c}</span>
+        ${signed(r.ctr, "vs lawan")}
+        ${signed(r.syn, "dg tim")}
+        ${r.flag ? `<span>⚠️ ${r.flag}</span>` : ""}
+      </span></button>`;
+  }).join("");
+}
+
+function renderPool() {
+  $("#pool").innerHTML = ROLES.map(r => `
+    <div class="role"><label for="h-${r}">${r}</label>
+      <div class="fields">
+        <input id="p-${r}" data-role="${r}" data-field="player" placeholder="Nama pemain" value="${pool[r].player}">
+        <input id="h-${r}" data-role="${r}" data-field="heroes" placeholder="mis. claude, moskov" value="${pool[r].heroes}" list="heroList">
+      </div></div>`).join("") +
+    `<datalist id="heroList">${D.heroes.map(h => `<option value="${h}">`).join("")}</datalist>`;
+}
+
+function render() { renderBoard(); renderGrid(); renderSuggestions(); }
+
+// ---------- event ----------
+document.addEventListener("click", e => {
+  const modeBtn = e.target.closest(".modes button");
+  if (modeBtn) return setMode(modeBtn.dataset.mode);
+  const sel = e.target.closest("[data-select]");
+  if (sel) return setMode(sel.dataset.select);
+  const filled = e.target.closest("[data-kind][data-hero]");
+  if (filled) return removeHero(filled.dataset.kind, filled.dataset.hero);
+  const hero = e.target.closest(".hero, .row");
+  if (hero && !hero.disabled) return addHero(hero.dataset.hero);
+  const tab = e.target.closest(".tabs button");
+  if (tab) {
+    document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b === tab));
+    document.querySelectorAll(".panel").forEach(p => p.hidden = p.dataset.panel !== tab.dataset.tab);
+  }
+});
+$("#undo").addEventListener("click", () => {
+  const k = history.pop();
+  if (k) { draft[k].pop(); saveState(); render(); }
+});
+$("#reset").addEventListener("click", () => {
+  draft = { ban: [], us: [], them: [] }; history = []; setMode("ban"); saveState(); render();
+});
+$("#search").addEventListener("input", renderGrid);
+$("#sort").addEventListener("change", renderSuggestions);
+$("#onlyOwn").addEventListener("change", renderSuggestions);
+document.addEventListener("input", e => {
+  const f = e.target.dataset && e.target.dataset.field;
+  if (!f) return;
+  pool[e.target.dataset.role][f] = e.target.value;
+  saveState(); renderGrid(); renderSuggestions();
+});
+
+// ---------- mulai ----------
+fetch("data/meta.json")
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(data => {
+    D = data;
+    META = Object.fromEntries(D.meta.map(m => [m.hero, m]));
+    const w = D.window;
+    const fmt = s => new Date(s).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+    $("#window").textContent = `${w.games} game pro, ${fmt(w.start)} – ${fmt(w.end)}`;
+    if (D.newerPatches.length) {
+      $("#patchNote").innerHTML = `<p class="note">Patch ${D.newerPatches.map(p => p.patch).join(", ")} rilis setelah data terakhir.
+        Hero yang berubah ditandai ⚠️ karena angkanya belum mencerminkan perubahan itu.</p>`;
+    }
+    loadState();
+    history = [...draft.ban.map(() => "ban"), ...draft.us.map(() => "us"), ...draft.them.map(() => "them")];
+    renderPool(); setMode("ban"); autoMode(); render();
+  })
+  .catch(() => {
+    $("#window").textContent = "";
+    $("#grid").innerHTML = `<p class="hint">Data belum bisa dimuat. Jalankan <code>python export_web_data.py</code>,
+      lalu buka lewat server lokal: <code>python -m http.server 8000 -d docs</code>.</p>`;
+  });
+</script>
+</body>
+</html>
